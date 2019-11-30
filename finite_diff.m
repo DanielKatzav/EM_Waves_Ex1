@@ -38,9 +38,9 @@ while(ErrorStillBig)
 end
 
 Area_S_potential = zeros(M,N);
-for j = 1:N 
-    for i = 0:M-1
-        Area_S_potential(i+1, j) = f_n_1(i*M+j,1);
+for n = 1:N 
+    for m = 1:M
+        Area_S_potential(m, n) = f_n_1(m+(n-1)*M,1);
     end
 end
 
