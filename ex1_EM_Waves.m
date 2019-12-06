@@ -7,13 +7,13 @@
 - See PDF file attached
 
 %}
-
-clear all
-close all
 clc
+clear all
+clear variables
+close all
 
+% --------- Question 1 --------- %
 mm = 10^-3;
-
 w_out = 10*mm;
 h_out = 4*mm;
 
@@ -42,12 +42,79 @@ phi_nm_0 = getPhiZero(Area_S);
 [M,N] = size(Area_S);
 Ns = M*N;
 
+% Looks like I have a problem here at Matrix of R, not sure where, can't
+% really find it, but I have another box below the left box that is being
+% disregarded - to be mentioned on the summarize in the PDF
+% also, it seems like the iterations number is beyond 3 times of the actual
+% number that supposed to be, so will need to state that as well
+[NumOfIterations, gamma]= finite_diff(Area_S, zeros(Ns,1), 10^-5, phi_nm_0);
 
-[NumOfIterations, finalerror]= finite_diff(Area_S, zeros(Ns,1), 10^-5, phi_nm_0);
-disp(NumOfIterations);
-disp(finalerror);
 
 
+% --------- Question 2 --------- %
+
+epsilon_0 = 8.8541878128e-12;   % [F/m]
+epsilon_1 = 2.5*epsilon_0;
+epsilon_2 = 3.9*epsilon_0;
+miu_0 = 4*pi*(10^-7);                % [H/m]
+miu_1 = miu_0;
+miu_2 = miu_0;
+
+C1 = GetCapacitance(gamma, epsilon_1);
+C2 = GetCapacitance(gamma, epsilon_2);
+Z_C1 = getImpedance(C1, getInductance(miu_1, gamma));
+Z_C2 = getImpedance(C2, getInductance(miu_2, gamma));
+
+v_1 = getWaveVelocity(miu_1, epsilon_1);
+v_2 = getWaveVelocity(miu_2, epsilon_2);
+
+
+
+ID = 203389770;
+R_g = Z_C1*(ID /(ID +ID)); % Just Re-Stating here, I have made the excercise alone
+
+Gamma_g = (Z_C1 - R_g)/(Z_C1 + R_g);
+Gamma_21 = (Z_C2 - Z_C1)/(Z_C2 + Z_C1);
+Gamma_12 = -Gamma_21;
+
+T = 8;
+el_1 = T*v_1;
+el_2 = T*v_2;
+T_p = T/10;
+
+dt = T/50;
+dz = (el_1 + el_2)/1000;
+
+%Axis and Matrices Definition
+t = 0:dt:8*T;
+z = 0:dz:el_1+el_2;
+
+[Z_cord,T_cord]=meshgrid(z,t);  %Defining a set of coords for V(t,z)
+%V is defined by the sum of V1_p, V1_m, V2_p
+V1_p=zeros(size(T_cord));   %Forward travelling wave on Z_C1
+V1_m=zeros(size(T_cord));   %Backward travelling wave on Z_C1
+V2_p=zeros(size(T_cord));   %Forward travelling wave on Z_C2
+
+%This loop is the sum of 1 to 4 of the Gamma parameters multiplied by the
+%corresponding wave
+for k=1:4
+    V1_p(:,1:el_1/dz) = V1_p(:,1:el_1/dz)+(Z_C1/(Z_C1+R_g))*(Gamma_12*Gamma_g)^(k-1)*(heaviside(T_cord(:,1:el_1/dz)-Z_cord(:,1:el_1/dz)./v_1-2*T*(k-1))-heaviside(T_cord(:,1:el_1/dz)-T/10-Z_cord(:,1:el_1/dz)./v_1-2*T*(k-1)));
+    if k~=4
+        V1_m(:,1:el_1/dz) = V1_m(:,1:el_1/dz)+(Z_C1/(Z_C1+R_g))*Gamma_12^k*Gamma_g^(k-1)*(heaviside(T_cord(:,1:el_1/dz)+z(:,1:el_1/dz)./v_1-2*T*k)-heaviside(T_cord(:,1:el_1/dz)-T/10+Z_cord(:,1:el_1/dz)./v_1-2*T*k));
+        V2_p(:,el_1/dz+1:(el_1+el_2)/dz) = V2_p(:,el_1/dz+1:(el_1+el_2)/dz)+(Z_C1/(Z_C1+R_g))*(1*Gamma_12)*(Gamma_12*Gamma_g)^(k-1)*(heaviside(T_cord(:,el_1/dz+1:(el_1+el_2)/dz)-Z_cord(:,el_1/dz+1:(el_1+el_2)/dz)./v_2+el_1/v_2-T-2*T*(k-1))-heaviside(T_cord(:,el_1/dz+1:(el_1+el_2)/dz)-T/10-Z_cord(:,el_1/dz+1:(el_1+el_2)/dz)./v_2+el_1/v_2-T-2*T*(k-1)));
+    else
+        V1_m(:,1:el_1/dz) = V1_m(:,1:el_1/dz);
+        V2_p(:,el_1/dz+1:(el_1+el_2)/dz) = V2_p(:,el_1/dz+1:(el_1+el_2)/dz);
+    end
+end
+
+V = V1_p + V1_m + V2_p;
+figure(4)
+imagesc(20*log(abs(V)))
+colorbar
+title('Propagation of 20log|V(t,z)|')
+xlabel('z [mm]')
+ylabel('t [sec/50]')
 
 function NewArea = Disregard_Area(RawArea, height, width, start_y, start_x, LowPotential)
     % Remove the Inner parts of the disregarded area - i.e. set the values
@@ -64,7 +131,6 @@ function NewArea = Disregard_Area(RawArea, height, width, start_y, start_x, LowP
         NewArea(start_y+height,start_x+i) = LowPotential;
     end
 end
-
 function mat = CreateArea(height, width, dx, dy, HigherPotential)
     N = ((width / dx)+1);
     M = ((height / dy)+1);
@@ -82,8 +148,6 @@ function mat = CreateArea(height, width, dx, dy, HigherPotential)
     end
     
 end
-
-
 function phi_zero = getPhiZero(Area)
     [M,N] = size(Area);
     phi_zero = zeros(M*N,1);
@@ -132,8 +196,18 @@ function phi_zero = getPhiZero(Area)
 
 end
 
-
-
+function C = GetCapacitance(gamma, epsilon)
+    C = gamma*epsilon;
+end
+function Z = getImpedance(C, L)
+    Z = sqrt(C/L);
+end
+function L = getInductance(miu, gamma)
+   L = miu/gamma;
+end
+function v = getWaveVelocity(miu, epsilon)
+    v = 1/sqrt(miu*epsilon);
+end
 
 
 
